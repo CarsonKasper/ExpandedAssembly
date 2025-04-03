@@ -1,0 +1,15 @@
+{
+  "autodeskProduct": "Fusion",
+  "type": "addin",
+  "id": "your-unique-id",
+  "author": "Carson Kasper",
+  "description": {
+    "": "An add-in that allows you to mirror components"
+  },
+  "version": "Beta",
+  "runOnStartup": false,
+  "supportedOS": "windows|mac",
+  "editEnabled": true,
+  "iconFilename": "AddInIcon.svg",
+  "main": "ExpandedAssembly.py"
+}

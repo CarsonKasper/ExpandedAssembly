@@ -1,0 +1,35 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# VSCode settings
+.vscode/
+
+# MacOS system files
+.DS_Store
+
+# Windows system files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Fusion 360 temp / cache files
+*.log
+*.bak
+
+# Environment / virtualenv
+.env
+.venv/
+venv/
+ENV/
+env/
+
+# Compiled resources or build artifacts
+*.zip
+*.tar.gz
+*.egg-info/
+
+# User preferences or IDE-specific junk
+*.sublime-workspace
+*.idea/
