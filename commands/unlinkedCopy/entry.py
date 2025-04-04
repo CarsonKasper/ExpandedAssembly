@@ -63,12 +63,21 @@ def command_created(args: adsk.core.CommandCreatedEventArgs):
     futil.log(f'{CMD_NAME} Command Created')
     command = args.command
     inputs = command.commandInputs
-
+    
+    # Add a selection input for a component
+    select_input = inputs.addSelectionInput(
+        'target_component', 
+        'Select Component', 
+        'Choose the component to copy'
+    )
+    select_input.addSelectionFilter('Occurrences')  # Only allow component instances
+    select_input.setSelectionLimits(1, 1)  # Require exactly one selection
+    
     futil.add_handler(command.execute, command_execute, local_handlers=local_handlers)
     futil.add_handler(command.destroy, command_destroy, local_handlers=local_handlers)
 
 def command_execute(args: adsk.core.CommandEventArgs):
-    operation.run_operation()
+    operation.run_operation(args)
 
 def command_destroy(args: adsk.core.CommandEventArgs):
     futil.log(f'{CMD_NAME} Command Destroyed')

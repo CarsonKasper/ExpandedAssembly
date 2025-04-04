@@ -1,11 +1,10 @@
 import adsk.core
 
 def run_operation():
+    inputs = args.command.commandInputs
+    selected_input = inputs.itemById('target_component')
+    selected_occurrence = selected_input.selection(0)
+    
     app = adsk.core.Application.get()
     ui = app.userInterface
     ui.messageBox("You clicked the Unlinked Copy button!")
-    
-def on_command_created(command: adsk.core.Command, inputs: adsk.core.CommandInputs):
-    select_input = inputs.addSelectionInput('target_component', 'Select Component', 'Choose the component to copy')
-    select_input.addSelectionFilter('Occurrences')
-    select_input.setSelectionLimits(1, 1)
