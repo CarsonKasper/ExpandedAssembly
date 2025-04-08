@@ -63,18 +63,43 @@ def command_created(args: adsk.core.CommandCreatedEventArgs):
     futil.log(f'{CMD_NAME} Command Created')
     command = args.command
     inputs = command.commandInputs
-    
-    # Add a selection input for a component
+
+    # Selection input
     select_input = inputs.addSelectionInput(
-        'target_component', 
-        'Select Component', 
+        'target_component',
+        'Select Component',
         'Choose the component to copy'
     )
-    select_input.addSelectionFilter('Occurrences')  # Only allow component instances
-    select_input.setSelectionLimits(1, 1)  # Require exactly one selection
-    
+    select_input.addSelectionFilter('Occurrences')
+    select_input.setSelectionLimits(1, 1)
+
+    # Name input (starts empty — filled when user selects something)
+    name_input = inputs.addTextBoxCommandInput(
+        'copy_name',
+        'New Name',
+        '',
+        1,
+        False
+    )
+
     futil.add_handler(command.execute, command_execute, local_handlers=local_handlers)
     futil.add_handler(command.destroy, command_destroy, local_handlers=local_handlers)
+    futil.add_handler(command.inputChanged, command_input_changed, local_handlers=local_handlers)
+
+def command_input_changed(args: adsk.core.InputChangedEventArgs):
+    try:
+        changed = args.input
+        inputs = args.inputs
+
+        if changed.id == 'target_component' and changed.selectionCount > 0:
+            occ = adsk.fusion.Occurrence.cast(changed.selection(0).entity)
+            if occ:
+                name_input = inputs.itemById('copy_name')
+                if name_input:
+                    name_input.text = f'{occ.component.name} UC'
+
+    except:
+        futil.handle_error('command_input_changed')
 
 def command_execute(args: adsk.core.CommandEventArgs):
     operation.run_operation(args)
