@@ -4,7 +4,6 @@ import os
 import tempfile
 
 def sanitize_filename(name: str) -> str:
-    # Remove characters that are not allowed in filenames
     invalid_chars = '<>:"/\\|?*'
     return ''.join(c for c in name if c not in invalid_chars)
 
@@ -34,42 +33,52 @@ def run_operation(args):
         custom_name = f"{occ.name} UC"
 
     component = occ.component
-
-    # Export the component
     export_mgr = design.exportManager
+    import_mgr = app.importManager
     temp_dir = tempfile.gettempdir()
     safe_name = sanitize_filename(custom_name)
     temp_path = os.path.join(temp_dir, f'{safe_name}_temp.f3d')
 
-    options = export_mgr.createFusionArchiveExportOptions(temp_path, component)
-    if not export_mgr.execute(options):
-        ui.messageBox('Failed to export component.')
+    # ✅ Export as .f3d
+    export_options = export_mgr.createFusionArchiveExportOptions(temp_path, component)
+    export_options.isComponentNative = True
+
+    if not export_mgr.execute(export_options):
+        ui.messageBox('❌ Failed to export component.')
         return
 
-    # Count how many components before import
+    # ✅ Confirm file is valid
+    if not os.path.exists(temp_path) or os.path.getsize(temp_path) < 1000:
+        ui.messageBox(f"⚠ Exported file is missing or invalid:\n{temp_path}")
+        return
+
     before_count = root_comp.occurrences.count
 
-    # Import the file
-    import_mgr = app.importManager
+    # ✅ Try importing the file
     import_options = import_mgr.createFusionArchiveImportOptions(temp_path)
-    if not import_mgr.importToTarget(import_options, root_comp):
-        ui.messageBox('Failed to import unlinked component.')
+
+    try:
+        result = import_mgr.importToTarget(import_options, root_comp)
+        if not result:
+            raise RuntimeError("Import returned False.")
+    except Exception as e:
+        ui.messageBox(f"❌ Import failed:\n{e}\n\nFile path:\n{temp_path}")
         return
 
-    # Identify the newly added occurrence
+    # ✅ Locate the new occurrence
     after_count = root_comp.occurrences.count
     if after_count <= before_count:
-        ui.messageBox('Import succeeded but no new occurrence found.')
+        ui.messageBox('⚠ Import succeeded but no new component found.')
         return
 
     new_occ = root_comp.occurrences.item(after_count - 1)
     new_occ.component.name = custom_name
 
-    # Cleanup temp file
+    # ✅ Cleanup
     try:
         if os.path.exists(temp_path):
             os.remove(temp_path)
     except Exception as e:
-        ui.messageBox(f"Warning: Could not delete temp file: {str(e)}")
+        ui.messageBox(f"⚠ Warning: Could not delete temp file:\n{str(e)}")
 
     ui.messageBox(f'✅ Unlinked copy created: {new_occ.name}')
