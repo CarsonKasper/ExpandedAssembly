@@ -7,6 +7,7 @@ import adsk.core
 from .mirrorComponent import entry as mirror_Component
 from .unlinkedCopy import entry as unlinked_copy
 from .flipComponent import entry as flip_component
+from .cleanImport import entry as clean_import
 
 # TODO add your imported modules to this list.
 # Fusion will automatically call the start() and stop() functions.
@@ -14,7 +15,8 @@ from .flipComponent import entry as flip_component
 commands = [
     mirror_Component,
     unlinked_copy,
-    flip_component
+    flip_component,
+    clean_import
 ]
 
 def create_shared_panel():
