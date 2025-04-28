@@ -11,10 +11,9 @@ ui = app.userInterface
 # Unique command ID and metadata
 CMD_ID = 'makeComponent'
 CMD_NAME = 'Make Component'
-CMD_DESCRIPTION = 'Creates a new component from selected components, preserving all joints.'
+CMD_DESCRIPTION = 'Creates a new component containing selected components'
 IS_PROMOTED = True
 
-# Panel where it will appear
 WORKSPACE_ID = 'FusionSolidEnvironment'
 PANEL_ID = 'ExpandedAssemblyPanel'
 COMMAND_BESIDE_ID = 'ScriptsManagerCommand'
@@ -64,22 +63,22 @@ def command_created(args: adsk.core.CommandCreatedEventArgs):
     command = args.command
     inputs = command.commandInputs
 
-    # Multi-selection input for occurrences
+    # Selection input: multiple components
     select_input = inputs.addSelectionInput(
-        'target_components',
+        'target_components',  # ID matches operation.py
         'Select Components',
-        'Choose components to group into a new assembly'
+        'Choose the components to group into a new component'
     )
     select_input.addSelectionFilter('Occurrences')
-    select_input.setSelectionLimits(1)  # 1 or more
+    select_input.setSelectionLimits(1)  # Allow at least 1, no hard max
 
-    # Name input for the new assembly
+    # Name input: name for new component
     name_input = inputs.addTextBoxCommandInput(
-        'assembly_name',
-        'Assembly Name',
-        'NewAssembly',
+        'new_component_name',  # ID matches operation.py
+        'New Component Name',
+        'New Component',
         1,
-        False
+        False  # Editable
     )
 
     futil.add_handler(command.execute, command_execute, local_handlers=local_handlers)
