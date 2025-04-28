@@ -8,17 +8,20 @@ from . import operation
 app = adsk.core.Application.get()
 ui = app.userInterface
 
-CMD_ID = 'cleanImport'
-CMD_NAME = 'Clean Import'
-CMD_DESCRIPTION = 'Imports a .f3d file and creates a clean component'
+# Unique command ID and metadata
+CMD_ID = 'makeComponent'
+CMD_NAME = 'Make Component'
+CMD_DESCRIPTION = 'Creates a new component from selected components, preserving all joints.'
 IS_PROMOTED = True
 
+# Panel where it will appear
 WORKSPACE_ID = 'FusionSolidEnvironment'
 PANEL_ID = 'ExpandedAssemblyPanel'
 COMMAND_BESIDE_ID = 'ScriptsManagerCommand'
 
 ICON_FOLDER = os.path.join(os.path.dirname(__file__), 'resources', '')
 
+# Local list to prevent garbage collection
 local_handlers = []
 
 def start():
@@ -61,7 +64,23 @@ def command_created(args: adsk.core.CommandCreatedEventArgs):
     command = args.command
     inputs = command.commandInputs
 
-    inputs.addStringValueInput('filename', 'F3D Filename', '')
+    # Multi-selection input for occurrences
+    select_input = inputs.addSelectionInput(
+        'target_components',
+        'Select Components',
+        'Choose components to group into a new assembly'
+    )
+    select_input.addSelectionFilter('Occurrences')
+    select_input.setSelectionLimits(1)  # 1 or more
+
+    # Name input for the new assembly
+    name_input = inputs.addTextBoxCommandInput(
+        'assembly_name',
+        'Assembly Name',
+        'NewAssembly',
+        1,
+        False
+    )
 
     futil.add_handler(command.execute, command_execute, local_handlers=local_handlers)
     futil.add_handler(command.destroy, command_destroy, local_handlers=local_handlers)

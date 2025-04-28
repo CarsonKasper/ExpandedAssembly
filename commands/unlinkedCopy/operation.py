@@ -72,6 +72,10 @@ def run_operation(args):
         return
 
     new_occ = root_comp.occurrences.item(after_count - 1)
+    
+    if new_occ.isReferencedComponent:
+        new_occ.breakLink()
+
     new_occ.component.name = custom_name
 
     # ✅ Cleanup
