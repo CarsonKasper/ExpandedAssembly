@@ -11,7 +11,7 @@ ui = app.userInterface
 # Unique command ID and metadata
 CMD_ID = 'unlinkedCopy'
 CMD_NAME = 'Unlinked Copy'
-CMD_DESCRIPTION = 'Creates an unlinked copy of the selected component'
+CMD_DESCRIPTION = 'Creates unlinked copies of the selected components'
 IS_PROMOTED = True
 
 # Panel was created in commands/__init__.py
@@ -41,8 +41,8 @@ def start():
             control = panel.controls.addCommand(cmd_def, COMMAND_BESIDE_ID, False)
             control.isPromoted = IS_PROMOTED
 
-    except:
-        futil.handle_error('start')
+    except Exception as e:
+        futil.handle_error(f'start: {str(e)}')
 
 def stop():
     try:
@@ -56,53 +56,41 @@ def stop():
         if cmd_def:
             cmd_def.deleteMe()
 
-    except:
-        futil.handle_error('stop')
+    except Exception as e:
+        futil.handle_error(f'stop: {str(e)}')
 
 def command_created(args: adsk.core.CommandCreatedEventArgs):
     futil.log(f'{CMD_NAME} Command Created')
     command = args.command
     inputs = command.commandInputs
 
-    # Selection input
+    # Selection input (allow multiple components to be selected)
     select_input = inputs.addSelectionInput(
-        'target_component',
-        'Select Component',
-        'Choose the component to copy'
+        'target_components',
+        'Select Components',
+        'Choose the components to copy'
     )
     select_input.addSelectionFilter('Occurrences')
-    select_input.setSelectionLimits(1, 1)
-
-    # Name input (starts empty — filled when user selects something)
-    name_input = inputs.addTextBoxCommandInput(
-        'copy_name',
-        'New Name',
-        '',
-        1,
-        False
-    )
+    select_input.setSelectionLimits(1, 0)  # Allow multiple selections
 
     futil.add_handler(command.execute, command_execute, local_handlers=local_handlers)
     futil.add_handler(command.destroy, command_destroy, local_handlers=local_handlers)
-    futil.add_handler(command.inputChanged, command_input_changed, local_handlers=local_handlers)
-
-def command_input_changed(args: adsk.core.InputChangedEventArgs):
-    try:
-        changed = args.input
-        inputs = args.inputs
-
-        if changed.id == 'target_component' and changed.selectionCount > 0:
-            occ = adsk.fusion.Occurrence.cast(changed.selection(0).entity)
-            if occ:
-                name_input = inputs.itemById('copy_name')
-                if name_input:
-                    name_input.text = f'{occ.component.name} UC'
-
-    except:
-        futil.handle_error('command_input_changed')
 
 def command_execute(args: adsk.core.CommandEventArgs):
-    operation.run_operation(args)
+    # Get the selected occurrences from the command inputs
+    command = args.command
+    inputs = command.commandInputs
+    select_input = inputs.itemById('target_components')
+    
+    if not select_input or select_input.selectionCount == 0:
+        ui.messageBox('No components selected to copy.')
+        return
+
+    # Extract occurrences
+    occurrences = [adsk.fusion.Occurrence.cast(select_input.selection(i).entity) for i in range(select_input.selectionCount)]
+    
+    # Now call the operation with both arguments
+    operation.run_operation(args, occurrences)
 
 def command_destroy(args: adsk.core.CommandEventArgs):
     futil.log(f'{CMD_NAME} Command Destroyed')

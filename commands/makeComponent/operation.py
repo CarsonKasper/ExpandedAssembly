@@ -1,86 +1,36 @@
 import adsk.core
 import adsk.fusion
-import traceback
-import os
-from ..unlinkedCopy import operation as unlinked_copy
+from ..unlinkedCopy.operation import run_operation as unlinkedCopy
 
-def run_operation(args: adsk.core.CommandEventArgs):
+def run_make_component(args):
     app = adsk.core.Application.get()
     ui = app.userInterface
     design = adsk.fusion.Design.cast(app.activeProduct)
     root_comp = design.rootComponent
 
-    try:
-        inputs = args.command.commandInputs
-        selections_input = inputs.itemById('target_components')
-        name_input = inputs.itemById('new_component_name')
+    # Get command inputs
+    inputs = args.command.commandInputs
+    select_input = inputs.itemById('target_components')
+    name_input = inputs.itemById('new_component_name')
 
-        if selections_input.selectionCount == 0:
-            ui.messageBox('No components selected.')
-            return
+    if not select_input or select_input.selectionCount == 0:
+        ui.messageBox('No components selected to copy.')
+        return
 
-        new_name = name_input.text.strip() or 'New Component Group'
-        new_occurrence = root_comp.occurrences.addNewComponent(adsk.core.Matrix3D.create())
-        new_component = new_occurrence.component
-        new_component.name = new_name
+    selected_occs = [adsk.fusion.Occurrence.cast(select_input.selection(i).entity) for i in range(select_input.selectionCount)]
 
-        copied_occurrences = []
+    # Create the new parent component
+    new_occurrence = root_comp.occurrences.addNewComponent(adsk.core.Matrix3D.create())
+    new_comp = new_occurrence.component
+    new_comp.name = name_input.text.strip()
 
-        for i in range(selections_input.selectionCount):
-            occ = adsk.fusion.Occurrence.cast(selections_input.selection(i).entity)
-            if not occ:
-                continue
+    # Use Unlinked Copy to duplicate the selected components
+    copied_occs = unlinkedCopy(args, selected_occs)
 
-            # Build mock inputs for Unlinked Copy
-            class FakeArgs:
-                def __init__(self, occ, name):
-                    self.command = self
-                    self.commandInputs = self
-                    self._inputs = {
-                        'target_component': FakeSelectionInput(occ),
-                        'copy_name': FakeTextBoxInput(name)
-                    }
+    # Move the copied components into the new component
+    for occ in copied_occs:
+        transform = occ.transform
+        moved = new_comp.occurrences.addExistingComponent(occ.component, transform)
+        occ.deleteMe()
 
-                def itemById(self, id):
-                    return self._inputs.get(id)
-
-            class FakeSelectionInput:
-                def __init__(self, occ):
-                    self._selection = occ
-
-                def selectionCount(self):
-                    return 1
-
-                def selection(self, _):
-                    return adsk.core.Selection.create(self._selection, None)
-
-            class FakeTextBoxInput:
-                def __init__(self, text):
-                    self.text = text
-
-            safe_name = f'{occ.name}_UC'
-            fake_args = FakeArgs(occ, safe_name)
-
-            before_count = root_comp.occurrences.count
-            unlinked_copy.run_operation(fake_args)
-            after_count = root_comp.occurrences.count
-
-            if after_count > before_count:
-                new_occ = root_comp.occurrences.item(after_count - 1)
-                copied_occurrences.append(new_occ)
-            else:
-                ui.messageBox(f'Failed to copy: {occ.name}')
-
-        for occ in copied_occurrences:
-            occ.transform = adsk.core.Matrix3D.create()
-            occ.moveToComponent(new_component)
-
-        # Delete original occurrences
-        for i in range(selections_input.selectionCount):
-            occ = adsk.fusion.Occurrence.cast(selections_input.selection(i).entity)
-            occ.deleteMe()
-
-        ui.messageBox(f'✅ Created new component "{new_component.name}" with {len(copied_occurrences)} items.')
-
-    except Exception as e:
-        ui.messageBox(f'❌ Operation failed:\n{traceback.format_exc()}')
+    ui.messageBox(f'✅ New grouped component created: {new_comp.name}')
