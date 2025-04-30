@@ -9,13 +9,19 @@ def sanitize_filename(name: str) -> str:
     return ''.join(c for c in name if c not in invalid_chars)
 
 def capture_joints(occurrences):
+    """Capture the joint information including reference geometry (faces, sketch points)."""
     joint_mapping = {}
 
     for occ in occurrences:
         # Iterate through all joints in the occurrence
         for joint in occ.joints:
-            # Use the joint's name as the key
-            joint_mapping[joint.name] = occ
+            joint_mapping[joint.name] = {
+                'joint': joint,
+                'parent_component': joint.parentComponent,
+                'child_component': joint.childComponent,
+                'parent_entities': [joint.parentEntity],  # Capture the parent entity (face, edge, or sketch point)
+                'child_entities': [joint.childEntity]   # Capture the child entity
+            }
 
     return joint_mapping
 
@@ -77,23 +83,25 @@ def run_operation(args, occurrences):
 
         new_occ.component.name = safe_name
 
-        # Remap joints (using the joint_mapping to find the original occurrence)
-        for joint_name, orig_occ in joint_mapping.items():
+        # Recreate joints for the new occurrence based on the original joint mapping
+        for joint_name, joint_data in joint_mapping.items():
             try:
-                # Loop through original occurrence's joints
-                for i in range(orig_occ.joints.count):
-                    original_joint = orig_occ.joints.item(i)
+                # Check if the joint is applicable for the new component
+                if joint_data['parent_component'] == occ.component or joint_data['child_component'] == occ.component:
+                    # Recreate the joint on the new component using the parent-child references
+                    parent_entity = joint_data['parent_entities'][0]
+                    child_entity = joint_data['child_entities'][0]
 
                     # Create a new joint for the copied component
                     new_joint = new_occ.joints.addJoint(
-                        original_joint.type,
-                        original_joint.parentComponent,
-                        original_joint.childComponent
+                        joint_data['joint'].type,
+                        parent_entity,
+                        child_entity
                     )
 
-                    # Add any additional properties if necessary
-                    new_joint.jointType = original_joint.jointType
-                    new_joint.isRigid = original_joint.isRigid
+                    # Copy joint properties if needed
+                    new_joint.jointType = joint_data['joint'].jointType
+                    new_joint.isRigid = joint_data['joint'].isRigid
 
             except Exception as e:
                 ui.messageBox(f"⚠ Error when remapping joint {joint_name}:\n{e}")
@@ -105,4 +113,3 @@ def run_operation(args, occurrences):
         except Exception as e:
             ui.messageBox(f"⚠ Warning: Could not delete temp file for {occ.component.name}:\n{str(e)}")
 
-        ui.messageBox(f'✅ Unlinked copy created for: {new_occ.name}')
