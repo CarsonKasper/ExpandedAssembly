@@ -8,20 +8,16 @@ from . import operation
 app = adsk.core.Application.get()
 ui = app.userInterface
 
-# Unique command ID and metadata
-CMD_ID = 'makeComponent'
-CMD_NAME = 'Make Component'
-CMD_DESCRIPTION = 'Creates a new component and copies selected components into it'
+CMD_ID = 'connect'
+CMD_NAME = 'Connect'
+CMD_DESCRIPTION = 'Aligns two points and automatically creates a rigid group.'
 IS_PROMOTED = True
 
-# Panel was created in commands/__init__.py
 WORKSPACE_ID = 'FusionSolidEnvironment'
 PANEL_ID = 'ExpandedAssemblyPanel'
 COMMAND_BESIDE_ID = 'ScriptsManagerCommand'
-
 ICON_FOLDER = os.path.join(os.path.dirname(__file__), 'resources', '')
 
-# Local list to prevent garbage collection
 local_handlers = []
 
 def start():
@@ -64,29 +60,27 @@ def command_created(args: adsk.core.CommandCreatedEventArgs):
     command = args.command
     inputs = command.commandInputs
 
-    # Selection input (allow multiple components to be selected)
     select_input = inputs.addSelectionInput(
-        'target_components',
-        'Select Components',
-        'Choose the components to copy'
+        'target_points',
+        'Select Two Points',
+        'Select exactly two points to align and group'
     )
-    select_input.addSelectionFilter('Occurrences')
-    select_input.setSelectionLimits(1, 0)  # Allow multiple selections
-
-    # Name input (with default to 'New Component')
-    name_input = inputs.addTextBoxCommandInput(
-        'new_component_name',
-        'New Component Name',
-        'New Component',
-        1,
-        False
-    )
+    select_input.addSelectionFilter('Vertices')
+    select_input.setSelectionLimits(2, 2)
 
     futil.add_handler(command.execute, command_execute, local_handlers=local_handlers)
     futil.add_handler(command.destroy, command_destroy, local_handlers=local_handlers)
 
 def command_execute(args: adsk.core.CommandEventArgs):
-    operation.run_make_component(args)
+    inputs = args.command.commandInputs
+    point_input = inputs.itemById('target_points')
+
+    if point_input.selectionCount != 2:
+        ui.messageBox('Please select exactly two points.')
+        return
+
+    points = [point_input.selection(i).entity for i in range(2)]
+    operation.run_operation(args, points)
 
 def command_destroy(args: adsk.core.CommandEventArgs):
     futil.log(f'{CMD_NAME} Command Destroyed')
