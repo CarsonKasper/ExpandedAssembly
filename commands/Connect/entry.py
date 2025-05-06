@@ -1,63 +1,130 @@
 import adsk.core
 import adsk.fusion
-import traceback
 import os
+from ...lib import fusionAddInUtils as futil
+from ... import config
 from . import operation
+
+app = adsk.core.Application.get()
+ui = app.userInterface
 
 CMD_ID = 'connect'
 CMD_NAME = 'Connect'
-CMD_Descr = 'Align two components and then group them rigidly.'
+CMD_DESCRIPTION = 'Align two components and lock them with a rigid group'
+IS_PROMOTED = True
 
-handlers = []
+WORKSPACE_ID = 'FusionSolidEnvironment'
+PANEL_ID = 'ExpandedAssemblyPanel'
+COMMAND_BESIDE_ID = 'ScriptsManagerCommand'
 
-def run(context):
+ICON_FOLDER = os.path.join(os.path.dirname(__file__), 'resources', '')
+
+local_handlers = []
+
+def start():
     try:
-        app = adsk.core.Application.get()
-        ui = app.userInterface
-
-        # Create command definition
-        cmd_definitions = ui.commandDefinitions
-        cmd_def = cmd_definitions.itemById(CMD_ID)
-        if not cmd_def:
-            cmd_def = cmd_definitions.addButtonDefinition(CMD_ID, CMD_NAME, CMD_Descr)
-
-        # Create event handler
-        on_command_created = ConnectCommandCreatedHandler()
-        cmd_def.commandCreated.add(on_command_created)
-        handlers.append(on_command_created)
-
-        # Execute command
-        cmd_def.execute()
-
-    except Exception as e:
-        adsk.core.Application.get().userInterface.messageBox(f'Connect Error: {traceback.format_exc()}')
-
-def stop(context):
-    try:
-        app = adsk.core.Application.get()
-        ui = app.userInterface
         cmd_def = ui.commandDefinitions.itemById(CMD_ID)
         if cmd_def:
             cmd_def.deleteMe()
+
+        cmd_def = ui.commandDefinitions.addButtonDefinition(
+            CMD_ID, CMD_NAME, CMD_DESCRIPTION, ICON_FOLDER
+        )
+
+        futil.add_handler(cmd_def.commandCreated, command_created)
+
+        panel = ui.allToolbarPanels.itemById(PANEL_ID)
+        if panel and not panel.controls.itemById(CMD_ID):
+            control = panel.controls.addCommand(cmd_def, COMMAND_BESIDE_ID, False)
+            control.isPromoted = IS_PROMOTED
+
     except:
-        pass
+        futil.handle_error('start')
 
-class ConnectCommandCreatedHandler(adsk.core.CommandCreatedEventHandler):
-    def notify(self, args):
-        try:
-            cmd = args.command
-            cmd.isRepeatable = False
+def stop():
+    try:
+        panel = ui.allToolbarPanels.itemById(PANEL_ID)
+        if panel:
+            control = panel.controls.itemById(CMD_ID)
+            if control:
+                control.deleteMe()
 
-            # Set up execute event handler
-            on_execute = ConnectCommandExecuteHandler()
-            cmd.execute.add(on_execute)
-            handlers.append(on_execute)
-        except Exception as e:
-            adsk.core.Application.get().userInterface.messageBox(f'Command Setup Error: {traceback.format_exc()}')
+        cmd_def = ui.commandDefinitions.itemById(CMD_ID)
+        if cmd_def:
+            cmd_def.deleteMe()
 
-class ConnectCommandExecuteHandler(adsk.core.CommandEventHandler):
-    def notify(self, args):
-        try:
-            operation.run_operation()
-        except Exception as e:
-            adsk.core.Application.get().userInterface.messageBox(f'Execute Error: {traceback.format_exc()}')
+    except:
+        futil.handle_error('stop')
+
+def command_created(args: adsk.core.CommandCreatedEventArgs):
+    futil.log(f'{CMD_NAME} Command Created')
+    command = args.command
+    inputs = command.commandInputs
+
+    from_input = inputs.addSelectionInput('from_selection', 'From', 'Select the FROM point')
+    from_input.addSelectionFilter('Vertices')
+    from_input.addSelectionFilter('SketchPoints')
+    from_input.addSelectionFilter('ConstructionPoints')
+    from_input.addSelectionFilter('CircularEdges')
+    from_input.setSelectionLimits(1, 1)
+
+    to_input = inputs.addSelectionInput('to_selection', 'To', 'Select the TO point')
+    to_input.addSelectionFilter('Vertices')
+    to_input.addSelectionFilter('SketchPoints')
+    from_input.addSelectionFilter('ConstructionPoints')
+    from_input.addSelectionFilter('CircularEdges')
+    to_input.setSelectionLimits(1, 1)
+
+    inputs.addBoolValueInput('flip_direction', 'Flip', False, '', False)
+    inputs.addBoolValueInput('rotate_90', 'Rotate 90°', False, '', False)
+    inputs.addBoolValueInput('capture_position', 'Capture Position', True, '', True)
+
+    # Preselect logic
+    selections = ui.activeSelections
+    if selections.count == 2:
+        entity1 = selections.item(0).entity
+        entity2 = selections.item(1).entity
+        comp1 = get_owning_component(entity1)
+        comp2 = get_owning_component(entity2)
+
+        if comp1 != comp2:
+            from_input.addSelection(entity1)
+            to_input.addSelection(entity2)
+        else:
+            ui.messageBox('Cannot select two points from the same component.')
+
+    futil.add_handler(command.execute, command_execute, local_handlers=local_handlers)
+    futil.add_handler(command.destroy, command_destroy, local_handlers=local_handlers)
+    futil.add_handler(command.inputChanged, command_input_changed, local_handlers=local_handlers)
+
+def command_input_changed(args: adsk.core.InputChangedEventArgs):
+    changed = args.input
+    inputs = args.inputs
+
+    from_input = inputs.itemById('from_selection')
+    to_input = inputs.itemById('to_selection')
+
+    if changed.id == 'from_selection' and from_input.selectionCount == 1:
+        to_input.isActive = True
+
+    elif changed.id == 'to_selection' and to_input.selectionCount == 1:
+        from_entity = from_input.selection(0).entity
+        to_entity = to_input.selection(0).entity
+
+        if get_owning_component(from_entity) == get_owning_component(to_entity):
+            ui.messageBox('Selections must be from different components.')
+            to_input.clearSelection()
+
+def get_owning_component(entity):
+    try:
+        return entity.assemblyContext or entity.parentComponent
+    except:
+        return None
+
+def command_execute(args: adsk.core.CommandEventArgs):
+    operation.run_operation(args)
+
+def command_destroy(args: adsk.core.CommandEventArgs):
+    futil.log(f'{CMD_NAME} Command Destroyed')
+    global local_handlers
+    local_handlers = []
