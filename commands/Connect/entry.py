@@ -71,8 +71,8 @@ def command_created(args: adsk.core.CommandCreatedEventArgs):
     to_input = inputs.addSelectionInput('to_selection', 'To', 'Select the TO point')
     to_input.addSelectionFilter('Vertices')
     to_input.addSelectionFilter('SketchPoints')
-    from_input.addSelectionFilter('ConstructionPoints')
-    from_input.addSelectionFilter('CircularEdges')
+    to_input.addSelectionFilter('ConstructionPoints')
+    to_input.addSelectionFilter('CircularEdges')
     to_input.setSelectionLimits(1, 1)
 
     inputs.addBoolValueInput('flip_direction', 'Flip', False, '', False)
@@ -96,24 +96,39 @@ def command_created(args: adsk.core.CommandCreatedEventArgs):
     futil.add_handler(command.execute, command_execute, local_handlers=local_handlers)
     futil.add_handler(command.destroy, command_destroy, local_handlers=local_handlers)
     futil.add_handler(command.inputChanged, command_input_changed, local_handlers=local_handlers)
+    futil.add_handler(command.validateInputs, command_validate_inputs, local_handlers=local_handlers)
 
 def command_input_changed(args: adsk.core.InputChangedEventArgs):
-    changed = args.input
-    inputs = args.inputs
+    try:
+        changed = args.input
+        inputs = args.inputs
 
-    from_input = inputs.itemById('from_selection')
-    to_input = inputs.itemById('to_selection')
+        from_input = inputs.itemById('from_selection')
+        to_input = inputs.itemById('to_selection')
 
-    if changed.id == 'from_selection' and from_input.selectionCount == 1:
-        to_input.isActive = True
+        if changed.id == 'to_selection' and to_input.selectionCount == 1:
+            from_entity = from_input.selection(0).entity
+            to_entity = to_input.selection(0).entity
 
-    elif changed.id == 'to_selection' and to_input.selectionCount == 1:
-        from_entity = from_input.selection(0).entity
-        to_entity = to_input.selection(0).entity
+            if get_owning_component(from_entity) == get_owning_component(to_entity):
+                ui.messageBox('Selections must be from different components.')
+                to_input.clearSelection()
+    except:
+        futil.handle_error('command_input_changed')
 
-        if get_owning_component(from_entity) == get_owning_component(to_entity):
-            ui.messageBox('Selections must be from different components.')
-            to_input.clearSelection()
+    def command_validate_inputs(args: adsk.core.ValidateInputsEventArgs):
+        inputs = args.inputs
+        from_input = inputs.itemById('from_selection')
+        to_input = inputs.itemById('to_selection')
+
+        if from_input.selectionCount == 0:
+            args.areInputsValid = False
+            ui.messageBox('Please select the FROM point.')
+        elif to_input.selectionCount == 0:
+            args.areInputsValid = False
+            ui.messageBox('Please select the TO point.')
+        else:
+            args.areInputsValid = True
 
 def get_owning_component(entity):
     try:
