@@ -61,78 +61,49 @@ def command_created(args: adsk.core.CommandCreatedEventArgs):
     command = args.command
     inputs = command.commandInputs
 
-    from_input = inputs.addSelectionInput('from_selection', 'From', 'Select the FROM point')
-    from_input.addSelectionFilter('Vertices')
-    from_input.addSelectionFilter('SketchPoints')
-    from_input.addSelectionFilter('ConstructionPoints')
-    from_input.addSelectionFilter('CircularEdges')
-    from_input.setSelectionLimits(1, 1)
-
-    to_input = inputs.addSelectionInput('to_selection', 'To', 'Select the TO point')
-    to_input.addSelectionFilter('Vertices')
-    to_input.addSelectionFilter('SketchPoints')
-    to_input.addSelectionFilter('ConstructionPoints')
-    to_input.addSelectionFilter('CircularEdges')
-    to_input.setSelectionLimits(1, 1)
+    selection_input = inputs.addSelectionInput(
+        'selection_input', 'Selections', 'Select two points from different bodies'
+    )
+    selection_input.addSelectionFilter('Vertices')
+    selection_input.addSelectionFilter('SketchPoints')
+    selection_input.addSelectionFilter('ConstructionPoints')
+    selection_input.addSelectionFilter('CircularEdges')
+    selection_input.setSelectionLimits(0, 2)
 
     inputs.addBoolValueInput('flip_direction', 'Flip', False, '', False)
     inputs.addBoolValueInput('rotate_90', 'Rotate 90°', False, '', False)
     inputs.addBoolValueInput('capture_position', 'Capture Position', True, '', True)
 
-    # Preselect logic
-    selections = ui.activeSelections
-    if selections.count == 2:
-        entity1 = selections.item(0).entity
-        entity2 = selections.item(1).entity
-        comp1 = get_owning_component(entity1)
-        comp2 = get_owning_component(entity2)
-
-        if comp1 != comp2:
-            from_input.addSelection(entity1)
-            to_input.addSelection(entity2)
-        else:
-            ui.messageBox('Cannot select two points from the same component.')
-
     futil.add_handler(command.execute, command_execute, local_handlers=local_handlers)
     futil.add_handler(command.destroy, command_destroy, local_handlers=local_handlers)
     futil.add_handler(command.inputChanged, command_input_changed, local_handlers=local_handlers)
-    futil.add_handler(command.validateInputs, command_validate_inputs, local_handlers=local_handlers)
 
 def command_input_changed(args: adsk.core.InputChangedEventArgs):
     try:
-        changed = args.input
         inputs = args.inputs
+        selection_input = inputs.itemById('selection_input')
 
-        from_input = inputs.itemById('from_selection')
-        to_input = inputs.itemById('to_selection')
+        if not selection_input:
+            return
 
-        if changed.id == 'to_selection' and to_input.selectionCount == 1:
-            from_entity = from_input.selection(0).entity
-            to_entity = to_input.selection(0).entity
+        if selection_input.selectionCount == 2:
+            entity1 = selection_input.selection(0).entity
+            entity2 = selection_input.selection(1).entity
 
-            if get_owning_component(from_entity) == get_owning_component(to_entity):
-                ui.messageBox('Selections must be from different components.')
-                to_input.clearSelection()
+            body1 = get_owning_body(entity1)
+            body2 = get_owning_body(entity2)
+
+            if body1 and body2 and body1 == body2:
+                ui.messageBox('Selections must be on different bodies.')
+                selection_input.clearSelection()
+                selection_input.addSelection(entity1)
+
     except:
         futil.handle_error('command_input_changed')
 
-    def command_validate_inputs(args: adsk.core.ValidateInputsEventArgs):
-        inputs = args.inputs
-        from_input = inputs.itemById('from_selection')
-        to_input = inputs.itemById('to_selection')
-
-        if from_input.selectionCount == 0:
-            args.areInputsValid = False
-            ui.messageBox('Please select the FROM point.')
-        elif to_input.selectionCount == 0:
-            args.areInputsValid = False
-            ui.messageBox('Please select the TO point.')
-        else:
-            args.areInputsValid = True
-
-def get_owning_component(entity):
+def get_owning_body(entity):
     try:
-        return entity.assemblyContext or entity.parentComponent
+        return entity.body
     except:
         return None
 
